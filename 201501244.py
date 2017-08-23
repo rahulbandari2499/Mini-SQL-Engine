@@ -7,12 +7,13 @@ from texttable import Texttable
 ##TODO:
 #Semicolons and multiple queries
 #handle quotations for csv files.
-
-#OPERATOR SPLITTING
-#no repetation of the join column.
 #handle upper,lower cases for Query.
+#OPERATOR SPLITTING
 #use a function for execption handling.
 # see for NOT, ==
+
+#no repetation of the join column.
+
 
 DEBUG=False
 FUNCS=['max','min','avg','distinct','sum']
@@ -36,6 +37,23 @@ def where_clause_error_check(list):
     if len(list) != 2:
         print_error('Error:syntax error in where condition')
 
+def select_error_check(q):
+    temp = q.split('from')
+    if len(temp)>=3:
+        print_error('Error: given more than one \"from\" statement')
+
+    if 'select' not in ((re.sub(' +',' ',str(temp[0]))).strip().lower().split()):
+        print_error('Error: no select statement given')
+    elif q.lower().count('select')>=2:
+        print_error('More than one select statement given')
+
+def clause_error_check(temp_cond,norm_cols,func_cols,dis_cols):
+    if   len(dis_cols)+len(norm_cols)+len(func_cols) == 0:
+        print_error('Nothing given to select')
+    if  (len(func_cols) != 0 or len(dis_cols) != 0) and len(temp_cond) > 1 :
+        print_error('Error: where Condition can only be given to project columns')
+    elif len(dis_cols) != 0 and len(func_cols) != 0:
+        print_error('distinct and aggregate queries cannot be given at the time')
 
 class Parser():
     def __init__(self,que):
@@ -68,7 +86,7 @@ class Parser():
             i1 = (re.sub(' +',' ',self.given_query)).strip()
             if DEBUG:
                 print "i1",i1
-
+            select_error_check(self.given_query)
             if "from" in i1.lower():
                 ind=i1.lower().find('from')
                 a=i1[ind:ind+4]
@@ -76,7 +94,7 @@ class Parser():
                 if DEBUG:
                     print "i2",i2
             else:
-                sys.exit("Error:Invalid Syntax")
+                print_error("Error:Invalid Syntax")
 
             i2[0]= (re.sub(' +',' ',i2[0])).strip()
             if "select" in i2[0].lower():
@@ -86,12 +104,6 @@ class Parser():
                 if DEBUG:
                     print "temp_columns",temp_columns
                 self.query.append('select')
-            else:
-                sys.exit("Error:Invalid Syntax")
-
-            # if "distinct(" not in temp_columns.lower() and "distinct" in temp_columns.lower() :
-                # ind=temp_columns.lower().find('distinct')
-                # temp_columns=temp_columns[8:]
 
             temp_columns=(re.sub(' +',' ',temp_columns)).strip()
             temp_columns=temp_columns.split(',')
@@ -150,6 +162,7 @@ class Query(Parser):
 
     def query_process(self):
         norm_cols,dis_cols,func_cols=self.diff_cols()
+        clause_error_check(self.condition,norm_cols,func_cols,dis_cols)
         if DEBUG:
             print "norm_cols,dis_cols,func_cols",norm_cols,dis_cols,func_cols
 
@@ -217,23 +230,24 @@ class Query(Parser):
             self.format_output(temp_tabs,temp_cols,good_data)
 
         else:
-            s=[]
             for t in temp_tabs:
-                for col in temp_col[t]:
-                    s.append(t+'.'+col)
-            final_output.append(s)
-
-            for t in temp_tabs:
+                s=''
+                for col in temp_cols[t]:
+                    s+=t+'.'+col +','
+                print s.strip(',')
                 t=(re.sub(' +',' ',t)).strip()
                 t_name=str(t)+'.csv'
                 file_data=[]
                 self.read_from_file(t_name,file_data)
-                s=[]
+                # print file_data
+
                 for d in file_data:
-                    for col in temp_col[t]:
-                        s.append(d[self.tables[t].index(col)])
-                final_output.append(s)
-            self.print_output(final_output)
+                    s=''
+                    for col in temp_cols[t]:
+                        s+=d[self.tables[t].index(col)]+','
+                    print s.strip(',')
+                print
+            #self.print_output(final_output)
 
     def func_cols_query(self,func_cols):
         final_output=[]
@@ -375,10 +389,8 @@ class Query(Parser):
             self.read_from_file(t_name,file_data1)
             for d in file_data1:
                 exp=self.convert_string(d,t1,temp)
-                #print "exp:",exp
                 if eval(exp):
                     good_data[t1].append(d)
-                    #print d
             if DEBUG:
                 print "gd",good_data[t1]
         #print good_data
