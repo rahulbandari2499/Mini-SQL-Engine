@@ -4,17 +4,13 @@ import copy
 import csv
 from texttable import Texttable
 
-##TODO:
-#Semicolons and multiple queries
+##TODO
 #handle quotations for csv files.
-
-#OPERATOR SPLITTING
-#no repetation of the join column.
 #handle upper,lower cases for Query.
 #use a function for execption handling.
 # see for NOT, ==
 
-DEBUG=False
+DEBUG=True
 FUNCS=['max','min','avg','distinct','sum']
 OPERATORS=['>=','<=','==','>','<','=']
 
@@ -32,19 +28,15 @@ def column_error_check(col,col_list,tab):
     if col not in col_list:
         print_error('Given column \'' + col + '\' in table \'' + tab + '\'')
 
-def where_clause_error_check(list):
-    if len(list) != 2:
-        print_error('Error:syntax error in where condition')
-
 
 class Parser():
-    def __init__(self,que):
+    def __init__(self):
          self.query=[]
          self.tables={}
          self.query_cols=[]
          self.query_tables=[]
          self.condition=[]
-         self.given_query=que
+
     def parse_meta_data(self):
         fs=open('metadata.txt','r')
         try:
@@ -65,7 +57,7 @@ class Parser():
             print_error("Error:Cannot Open the file metadata.txt")
 
     def parse_given_query(self):
-            i1 = (re.sub(' +',' ',self.given_query)).strip()
+            i1 = (re.sub(' +',' ',str(sys.argv[1]))).strip()
             if DEBUG:
                 print "i1",i1
 
@@ -118,6 +110,7 @@ class Parser():
                     sys.exit("Error:Table "+str(table)+" Not Found")
             self.query_tables=copy.deepcopy(temp_tables)
 
+
 class Query(Parser):
     def __init__(self,parser_class):
         self.tables=parser_class.tables #table_name::column names
@@ -155,22 +148,16 @@ class Query(Parser):
 
         ## select <something> from table1 where <some_condition>
         if len(self.condition) > 1 and len(self.query_tables) == 1:
-            print "case1"
             self.one_table_one_where(norm_cols,dis_cols,func_cols)
         elif len(self.condition) > 1 and len(self.query_tables) > 1:
-            print "case2"
             self.more_tables_one_where(norm_cols)
         elif len(func_cols)!=0:
-            print "case3"
             self.func_cols_query(func_cols)
         elif len(dis_cols) !=0 :
-            print "case4"
             self.distinct_cols_query(dis_cols)
         elif len(self.query_tables) >=2 :
-            print "case5"
             self.join_cols_query(norm_cols)
         else:
-            print "case6"
             self.single_table_many_cols_query(norm_cols)
 
     def single_table_many_cols_query(self,norm_cols):
@@ -200,7 +187,7 @@ class Query(Parser):
         temp_cols,temp_tabs=self.get_query_tabs_cols(norm_cols)
         good_data=[]
         final_output=[]
-        if len(temp_tabs) ==2:
+        if len(temp_tabs==2):
             t1=temp_tabs[0]
             t2=temp_tabs[1]
             t1=(re.sub(' +',' ',t1)).strip()
@@ -211,8 +198,8 @@ class Query(Parser):
             t_name=str(t2)+'.csv'
             file_data2=[]
             self.read_from_file(t_name,file_data2)
-            for i2 in file_data2:
-                for i1 in file_data1:
+            for i1 in file_data1:
+                for i2 in file_data2:
                     good_data.append(i1+i2)
             self.format_output(temp_tabs,temp_cols,good_data)
 
@@ -347,51 +334,37 @@ class Query(Parser):
             self.special_join_with_clauses(param,oper,norm_cols)
 
     def special_join_with_clauses(self,query,oper,norm_cols):
-
-        good_data={}
-        join_tables=[]
         temp_cols,temp_tabs=self.get_query_tabs_cols(norm_cols)
-        if DEBUG:
-            print temp_tabs,temp_cols
+        good_data={}
         for q in query:
-            final_exp=""
-            op=""
+            temp = []
             for op in OPERATORS:
                 if op in q:
-                    #temp=q.split(op)
-                    op=op
+                    temp=q.split(op)
                     break
-            temp=q.split(op)
-            final_exp+=temp[0].strip()+" "+op+" "+temp[1]
-            temp=final_exp.split()
-            t1,c1=self.resolve_alias(temp[0],self.query_tables)
-            join_tables.append(t1)
-            if DEBUG:
-                print "t1,c1",t1,c1
+            where_clause_error_check(temp)
+            temp= (re.sub(' +',' ',temp)).strip()
+            t1,c1=self.resolve_alias(temp,self.query_tables)
             good_data[t1]=[]
             q=q.replace(temp[0],' '+ c1 + ' ')
             t_name=str(t1)+'.csv'
             file_data1=[]
             self.read_from_file(t_name,file_data1)
             for d in file_data1:
-                exp=self.convert_string(d,t1,temp)
-                #print "exp:",exp
-                if eval(exp):
+                exp=self.convert_string(d,t1)
+                try:
+                    eval(exp)
                     good_data[t1].append(d)
-                    #print d
-            if DEBUG:
-                print "gd",good_data[t1]
-        #print good_data
-        output_data = self.join_clause_data(oper,join_tables,good_data)
+                except NameError:
+                    print_error('Error:Join Query Error')
+        output_data = self.join_clause_data(oper,temp_tabs,good_data)
         self.format_output(temp_tabs,temp_cols,output_data)
 
     def join_clause_data(self,oper,temp_tabs,data):
-        if(len(temp_tabs)!=2):
-            print_error("Error:Wrong where Statement")
         t1=temp_tabs[0]
         t2=temp_tabs[1]
-        output_data=[]
         if oper == 'or':
+            output_data=[]
             t1=(re.sub(' +',' ',t1)).strip()
             t_name=str(t1)+'.csv'
             file_data1=[]
@@ -403,24 +376,25 @@ class Query(Parser):
             for i1 in data[t1]:
                 for i2 in file_data2:
                     if i2 not in data[t2]:
-                        if i1+i2 not in output_data:
-                            output_data.append(i1+i2)
+                        output_data.append(i1+i2)
             for i1 in data[t2]:
                 for i2 in file_data1:
                     if i2 not in data[t1]:
-                        if i2+i1 not in output_data:
-                            output_data.append(i2+i1)
-            for i1 in data[t1]:
-                for i2 in data[t2]:
-                    if i1+i2 not in output_data:
-                        output_data.append(i1+i2)
-
+                        output_data.append(i2+i1)
             return output_data
         elif oper == 'and':
+            output_data=[]
+            t1=(re.sub(' +',' ',t1)).strip()
+            t_name=str(t1)+'.csv'
+            file_data1=[]
+            self.read_from_file(t_name,file_data1)
+            t2=(re.sub(' +',' ',t2)).strip()
+            t_name=str(t2)+'.csv'
+            file_data2=[]
+            self.read_from_file(t_name,file_data2)
             for i1 in data[t1]:
-                for i2 in data[t2]:
-                    if i1+i2 not in output_data:
-                        output_data.append(i1+i2)
+                for i2 in data[i2]:
+                    output_data.append(i1+i2)
             return output_data
         else:
             output_data=[]
@@ -439,8 +413,6 @@ class Query(Parser):
             return output_data
 
     def normal_two_tables_join(self,query_list,norm_cols):
-        if DEBUG:
-            print "func:normal_two_tables_join"
         bad_data = {}
         good_data = {}
         for query in query_list[0]:
@@ -515,8 +487,25 @@ class Query(Parser):
         if DEBUG:
             print "final_output",final_output
         self.print_output(final_output)
+        # t1=temp_tabs[0]
+        # t2=temp_tabs[1]
+        # final_output=[]
+        # s=[]
+        # for col in temp_cols[t1]:
+        #     s.append(t1+'.'+col)
+        # for col in temp_cols[t2]:
+        #     s.append(t2+'.'+col)
+        # final_output.append(s)
+        # for d in data:
+        #     s=[]
+        #     for col in temp_cols[t1]:
+        #         s.append(d[self.tables[t1].index(col)])
+        #     for col in temp_cols[t2]:
+        #         s.append(d[self.tables[t2].index(col)])
+        #     final_output.append(s)
+        # self.print_output(final_output)
 
-    def get_query_tabs_cols(self,query_list,from_special_case=1):
+    def get_query_tabs_cols(self,query_list):
         query_cols={}
         query_tabs=[]
         if len(query_list) ==1 and query_list[0]=="*":
@@ -527,7 +516,7 @@ class Query(Parser):
             return query_cols,self.query_tables
 
         for q in query_list:
-            t,c=self.resolve_alias(q,self.query_tables,from_special_case)
+            t,c=self.resolve_alias(q,self.query_tables)
             if t not in query_cols.keys():
                 query_cols[t]=[]
                 query_tabs.append(t)
@@ -539,44 +528,11 @@ class Query(Parser):
             if DEBUG:
                 print "yes im in star loop"
             norm_cols = self.tables[self.query_tables[0]]
-        where_query=self.condition[1]
-        param=where_query
-        oper=''
-        if 'and' in where_query.lower():
-            ind=where_query.lower().find('and')
-            a=where_query[ind:ind+3]
-            where_query=where_query.split(a)
-            param=where_query[:]
-            oper='and'
-        elif 'or' in where_query.lower():
-            ind=where_query.lower().find('or')
-            a=where_query[ind:ind+2]
-            where_query=where_query.split(a)
-            param=where_query[:]
-            oper='or'
-        else:
-            where_query=[where_query]
-            param=where_query[:]
-        if len(where_query) >=3 :
-            print_error("Only one type of AND/OR clause should be used")
-        if DEBUG:
-            print "where_query",where_query
-
-        final_exp=""
-        op=""
-        for q in param:
-            for op in OPERATORS:
-                if op in self.condition[1]:
-                    op=op
-                    break
-            temp=q.split(op)
-            final_exp+=temp[0].strip()+" "+op+" "+temp[1]
-            if(param.index(q)!=len(param)-1):
-               final_exp+=" "+oper+" "
-        temp=final_exp.split()
         t_name=str(self.query_tables[0])+'.csv'
         file_data=[]
         self.read_from_file(t_name,file_data)
+        #if DEBUG:
+        #    print "file_data",file_data
         final_output=[]
         s=[]
         for col in norm_cols:
@@ -586,8 +542,9 @@ class Query(Parser):
                 s.append(col)
         final_output.append(s)
         for data in file_data:
-            final_string=self.convert_string(data,self.query_tables[0],temp)
+            final_string=self.convert_string(data,self.query_tables[0])
             s=[]
+            #print final_string
             if eval(final_string):
                 for col in norm_cols:
                         temp_table=''
@@ -597,7 +554,7 @@ class Query(Parser):
                         else:
                             repeat_count=0
                             for tab in self.query_tables:
-                                if col  in self.tables[tab]:
+                                if col in self.tables[tab]:
                                     repeat_count+=1
                                     temp_table=tab
                                     temp_col=col
@@ -607,17 +564,14 @@ class Query(Parser):
                                 print_error(" column \'"+ col + "\'doesn't exist")
                         s.append(data[self.tables[str(self.query_tables[0])].index(temp_col)])
                 final_output.append(s)
-            if DEBUG:
-                print final_output
+        if DEBUG:
+            print final_output
         self.print_output(final_output)
 
-    def convert_string(self,data,t,cond=[]):
+    def convert_string(self,data,t):
         s=""
-        if(len(cond)==0):
-            cond=self.condition[1].split()
-        else:
-            cond=cond
-        for q in cond:
+        #print "sp",self.condition[1].split()
+        for q in self.condition[1].split():
             q=(re.sub(' +',' ',q)).strip()
             if q == '=':
                 s+='=='
@@ -628,21 +582,20 @@ class Query(Parser):
             elif '.' in q:
                 temp_table,column = self.resolve_alias(q, [t])
                 condition_error_check(column, t, temp_table,self.tables[t])
+                #print "temp_table,column",temp_table,column
 
                 s+=data[self.tables[temp_table].index(column)]
             else:
                 s+=q
         return s
 
-    def resolve_alias(self,query,tabs,from_special_case=1):
+    def resolve_alias(self,query,tabs):
         if '.' in query:
             query=query.split('.')
             query[0]= (re.sub(' +',' ',query[0])).strip()
             query[1]= (re.sub(' +',' ',query[1])).strip()
-            if DEBUG:
-                print "tabs",tabs
             if query[0] not in tabs:
-                print_error('Table \''+query[0]+"\'  doesn't exist in given query")
+                print_error('Table \''+query[0]+"\'  doesn't exist in  metadata")
             return query[0],query[1]
         temp_table=''
         repeat_count=0
@@ -650,9 +603,9 @@ class Query(Parser):
             if query in self.tables[tab]:
                 repeat_count+=1
                 temp_table=tab
-        if repeat_count > 1 and from_special_case:
+        if repeat_count > 1:
             print_error("Given column \'" + query + "\' is ambiguos")
-        elif repeat_count == 0 and from_special_case:
+        elif repeat_count == 0 :
             print_error(" column \'"+ query + "\'doesn't exist")
         return temp_table,query
 
@@ -669,13 +622,8 @@ class Query(Parser):
 
 
 if __name__=="__main__":
-    sql_queries=str(sys.argv[1]).split(';')
-    for query in sql_queries:
-        if query !='':
-            print "Given_Query:",query
-            print "Output:"
-            p=Parser(query.strip())
-            tables=p.parse_meta_data()
-            p.parse_given_query()
-            q=Query(p)
-            q.query_process()
+    p=Parser()
+    tables=p.parse_meta_data()
+    p.parse_given_query()
+    q=Query(p)
+    q.query_process()
