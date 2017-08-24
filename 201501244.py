@@ -11,7 +11,6 @@ from texttable import Texttable
 #OPERATOR SPLITTING
 #use a function for execption handling.
 # see for NOT, ==
-
 #no repetation of the join column.
 
 
@@ -36,13 +35,17 @@ def column_error_check(col,col_list,tab):
 def where_clause_error_check(list):
     if len(list) != 2:
         print_error('Error:syntax error in where condition')
+def check_for_string(string, lis):
+    for i in range(len(lis)):
+        lis[i]=(re.sub(' +',' ',str(lis[i]))).strip()
+    return string in lis
 
 def select_error_check(q):
     temp = q.split('from')
     if len(temp)>=3:
         print_error('Error: given more than one \"from\" statement')
-
-    if 'select' not in ((re.sub(' +',' ',str(temp[0]))).strip().lower().split()):
+    temp[0]=(re.sub(' +',' ',str(temp[0]))).strip()
+    if not check_for_string('select', (temp[0].lower().split())):
         print_error('Error: no select statement given')
     elif q.lower().count('select')>=2:
         print_error('More than one select statement given')
@@ -83,6 +86,7 @@ class Parser():
             print_error("Error:Cannot Open the file metadata.txt")
 
     def parse_given_query(self):
+            self.given_query=self.given_query.strip('"')
             i1 = (re.sub(' +',' ',self.given_query)).strip()
             if DEBUG:
                 print "i1",i1
@@ -168,22 +172,22 @@ class Query(Parser):
 
         ## select <something> from table1 where <some_condition>
         if len(self.condition) > 1 and len(self.query_tables) == 1:
-            print "case1"
+            #print "case1"
             self.one_table_one_where(norm_cols,dis_cols,func_cols)
         elif len(self.condition) > 1 and len(self.query_tables) > 1:
-            print "case2"
+            #print "case2"
             self.more_tables_one_where(norm_cols)
         elif len(func_cols)!=0:
-            print "case3"
+            #print "case3"
             self.func_cols_query(func_cols)
         elif len(dis_cols) !=0 :
-            print "case4"
+            #print "case4"
             self.distinct_cols_query(dis_cols)
         elif len(self.query_tables) >=2 :
-            print "case5"
+            #print "case5"
             self.join_cols_query(norm_cols)
         else:
-            print "case6"
+            #print "case6"
             self.single_table_many_cols_query(norm_cols)
 
     def single_table_many_cols_query(self,norm_cols):
@@ -211,6 +215,7 @@ class Query(Parser):
 
     def join_cols_query(self,norm_cols):
         temp_cols,temp_tabs=self.get_query_tabs_cols(norm_cols)
+        print temp_cols,temp_tabs
         good_data=[]
         final_output=[]
         if len(temp_tabs) ==2:
@@ -248,7 +253,7 @@ class Query(Parser):
                     print s.strip(',')
                 print
             #self.print_output(final_output)
-
+####
     def func_cols_query(self,func_cols):
         final_output=[]
         s=[]
@@ -308,7 +313,7 @@ class Query(Parser):
                     row_data.append(val)
             col_data[column]=row_data
             max_len = max(max_len, len(col_data[column]))
-        print col_data
+        #print col_data
         final_output=[]
         final_output.append(header_row)
         i=0
@@ -321,7 +326,7 @@ class Query(Parser):
                     row.append('NULL')
             i=i+1
             final_output.append(row)
-        print "final_output", final_output
+        #print "final_output", final_output
         self.print_output(final_output)
 
     def more_tables_one_where(self,norm_cols):
@@ -399,7 +404,7 @@ class Query(Parser):
 
     def join_clause_data(self,oper,temp_tabs,data):
         if(len(temp_tabs)!=2):
-            print_error("Error:Wrong where Statement")
+            print_error("Error:Should be Two conditions in where Statement")
         t1=temp_tabs[0]
         t2=temp_tabs[1]
         output_data=[]
@@ -455,6 +460,7 @@ class Query(Parser):
             print "func:normal_two_tables_join"
         bad_data = {}
         good_data = {}
+        # print  "query_list",query_list
         for query in query_list[0]:
             query=(re.sub(' +',' ',query)).strip()
             oper=''
@@ -503,8 +509,13 @@ class Query(Parser):
             if DEBUG:
                 print "s",s
             temp_col,temp_tab=self.get_query_tabs_cols(norm_cols)
+            for col in temp_col[temp_tab[1]]:
+                if col in temp_col[temp_tab[0]]:
+                    index=temp_col[temp_tab[0]].index(col)
+                    del temp_col[temp_tab[0]][int(index)]
+
             if DEBUG:
-                print "temp_col,temp_tab",temp_col,temp_tab
+                print temp_col,temp_tab
             self.format_output(temp_tab,temp_col,s)
 
     def format_output(self,temp_tabs,temp_cols,data):
